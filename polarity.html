@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Polarity</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#060610;
+  font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif;
+  touch-action:none;user-select:none}
+canvas{display:block;width:100%;height:100%}
+
+#ui{position:fixed;top:0;left:0;right:0;
+  padding:env(safe-area-inset-top,18px) 22px 0;
+  display:flex;justify-content:space-between;align-items:flex-start;
+  pointer-events:none;z-index:10}
+.lives{display:flex;gap:7px;padding-top:14px}
+.heart{width:20px;height:20px;transition:transform .25s,opacity .25s}
+.heart.lost{opacity:.12;transform:scale(.75)}
+#score{font-size:2.2rem;font-weight:800;letter-spacing:-.04em;color:#fff;
+  line-height:1;padding-top:10px}
+#slabel{font-size:.65rem;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(255,255,255,.3);margin-top:1px;text-align:right}
+
+/* active side indicator */
+#side-badge{position:fixed;bottom:env(safe-area-inset-bottom,28px);left:50%;
+  transform:translateX(-50%);display:flex;align-items:center;gap:10px;
+  pointer-events:none;z-index:10;opacity:0;transition:opacity .3s}
+#side-badge.show{opacity:1}
+.badge-dot{width:10px;height:10px;border-radius:50%}
+#badge-text{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(255,255,255,.5);font-weight:600}
+
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:20;background:#060610;
+  transition:opacity .35s}
+.screen.hidden{opacity:0;pointer-events:none}
+.stitle{font-size:clamp(3rem,13vw,5rem);font-weight:900;letter-spacing:-.05em;
+  color:#fff;line-height:1;margin-bottom:.3em}
+.tt-wrap{position:relative;display:inline-block}
+.tt-red,.tt-blue,.tt-white{display:block;font-size:clamp(3rem,13vw,5rem);font-weight:900;letter-spacing:-.05em;line-height:1}
+.tt-red{position:absolute;top:0;left:0;color:#e8294a;transform:translate(-3px,2px);mix-blend-mode:screen}
+.tt-blue{position:absolute;top:0;left:0;color:#1a6bff;transform:translate(3px,-2px);mix-blend-mode:screen}
+.tt-white{position:relative;color:#fff}
+.ssub{font-size:.9rem;color:rgba(255,255,255,.35);margin-bottom:2rem;
+  text-align:center;padding:0 2.5rem;line-height:1.8}
+.btn{padding:16px 48px;border-radius:50px;border:none;font-size:1rem;
+  font-weight:700;cursor:pointer;background:#fff;color:#060610;
+  transition:transform .12s;-webkit-appearance:none}
+.btn:active{transform:scale(.95)}
+.hint-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem 1.4rem;
+  margin-bottom:2rem;text-align:left}
+.hint-row{display:flex;align-items:center;gap:.5rem;
+  font-size:.75rem;color:rgba(255,255,255,.32)}
+.k{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);
+  border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;
+  color:rgba(255,255,255,.5);white-space:nowrap}
+
+#fs-lbl{font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(255,255,255,.3);margin-bottom:.35rem}
+#fs-score{font-size:clamp(4rem,17vw,7rem);font-weight:900;letter-spacing:-.06em;
+  color:#fff;line-height:1;margin-bottom:.2rem}
+#fs-best{font-size:.85rem;color:rgba(255,255,255,.3);margin-bottom:3rem}
+
+.preview{width:68px;height:68px;border-radius:50%;margin-bottom:1.8rem;
+  position:relative;overflow:hidden;flex-shrink:0}
+.preview::before{content:'';position:absolute;left:0;top:0;width:50%;height:100%;background:#e8294a}
+.preview::after{content:'';position:absolute;right:0;top:0;width:50%;height:100%;background:#1a6bff}
+
+.btn-back{margin-top:1rem;padding:12px 36px;border-radius:50px;border:none;
+  background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);font-size:.9rem;
+  font-weight:600;cursor:pointer;-webkit-appearance:none;transition:background .15s}
+.btn-back:active{background:rgba(255,255,255,.18)}
+
+/* ── Touch controls ── */
+#touch-controls{position:fixed;inset:0;pointer-events:none;z-index:8;
+  display:none}
+#touch-controls.active{display:block}
+/* Joystick */
+#joystick-zone{position:absolute;bottom:env(safe-area-inset-bottom,24px);left:32px;
+  width:140px;height:140px;border-radius:50%;pointer-events:all;
+  touch-action:none}
+#joystick-base{position:absolute;inset:0;border-radius:50%;
+  background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.12)}
+#joystick-stick{position:absolute;width:56px;height:56px;border-radius:50%;
+  background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.3);
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  transition:transform .05s;pointer-events:none;
+  box-shadow:0 2px 12px rgba(0,0,0,.4)}
+/* Direction arrows on base */
+#joystick-base::before{content:'';position:absolute;inset:6px;border-radius:50%;
+  border:1px dashed rgba(255,255,255,.06)}
+.swap-btn{position:absolute;bottom:env(safe-area-inset-bottom,24px);right:32px;
+  width:72px;height:72px;border-radius:50%;pointer-events:all;
+  background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.13);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .1s,transform .1s;user-select:none;-webkit-user-select:none;
+  box-shadow:0 2px 12px rgba(0,0,0,.3)}
+.swap-btn:active{background:rgba(255,255,255,.22);transform:scale(.93)}
+.swap-btn-inner{width:36px;height:36px;border-radius:50%;
+  position:relative;overflow:hidden;flex-shrink:0;pointer-events:none}
+.swap-btn-inner::before{content:'';position:absolute;left:0;top:0;width:50%;height:100%;background:#e8294a}
+.swap-btn-inner::after{content:'';position:absolute;right:0;top:0;width:50%;height:100%;background:#1a6bff}
+/* Swap label */
+.swap-btn::after{content:'Q';position:absolute;bottom:-18px;left:50%;
+  transform:translateX(-50%);font-size:.6rem;letter-spacing:.1em;
+  color:rgba(255,255,255,.2);pointer-events:none}
+</style>
+</head>
+<body>
+
+<div class="screen" id="scr-start">
+  <div class="preview"></div>
+  <div class="stitle">
+    <span class="tt-wrap">
+      <span class="tt-red">POLARITY</span>
+      <span class="tt-blue">POLARITY</span>
+      <span class="tt-white">POLARITY</span>
+    </span>
+  </div>
+  <div class="ssub">Orienta el escudo hacia el color que ataca.<br>Cambia de mitad con Q o Shift.</div>
+  <div class="hint-grid">
+    <div class="hint-row"><span class="k">W A S D</span><span>Orientar</span></div>
+    <div class="hint-row"><span class="k">↑ ← ↓ →</span><span>Orientar</span></div>
+    <div class="hint-row"><span class="k">Q</span><span>Cambiar mitad</span></div>
+    <div class="hint-row"><span class="k">Shift</span><span>Cambiar mitad</span></div>
+  </div>
+  <button class="btn" id="btn-start">Jugar</button>
+  <button class="btn-back" id="toggle-touch-btn" style="margin-top:.8rem" onclick="toggleTouch()">Controles táctiles: OFF</button>
+</div>
+
+
+
+<!-- Touch controls (joystick + swap) -->
+<div id="touch-controls">
+  <div id="joystick-zone">
+    <div id="joystick-base"></div>
+    <div id="joystick-stick"></div>
+  </div>
+  <div class="swap-btn" id="swap-btn">
+    <div class="swap-btn-inner"></div>
+  </div>
+</div>
+
+<div class="screen hidden" id="scr-over">
+  <div id="fs-lbl">Tiempo</div>
+  <div id="fs-score">0s</div>
+  <div id="fs-best"></div>
+  <button class="btn" id="btn-restart">Otra vez</button>
+  <button class="btn-back" id="toggle-touch-btn" style="margin-top:.8rem" onclick="toggleTouch()">Controles táctiles: OFF</button>
+</div>
+
+<div id="ui">
+  <div class="lives" id="lives-el"></div>
+  <div>
+    <div id="score">0s</div>
+    <div id="slabel">Tiempo</div>
+  </div>
+</div>
+
+<div id="side-badge">
+  <div class="badge-dot" id="badge-dot"></div>
+  <div id="badge-text"></div>
+</div>
+
+
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let W, H, dpr;
+
+function resize(){
+  dpr = window.devicePixelRatio||1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+// ─── constants ────────────────────────────────────────────────
+const MAX_LIVES   = 3;
+const PR          = 44;
+const ER          = 21;
+const REPEL_DIST  = 160;
+const REPEL_FORCE = 28;
+const BASE_SPEED  = 2.1;
+const BASE_SPAWN  = 1300;
+
+const C_RED  = '#e8294a';
+const C_BLUE = '#1a6bff';
+const G_RED  = 'rgba(232,41,74,';
+const G_BLUE = 'rgba(26,107,255,';
+
+// ─── game state ───────────────────────────────────────────────
+let state = 'start';
+let lives, startTime, spawnTimer, enemies, lastTs, bestScore = 0;
+
+// dir: which direction the ACTIVE side faces
+// 0=up, 1=right, 2=down, 3=left
+let dir = 2;
+
+// activeColor: which half is currently active ('red' or 'blue')
+// Q / Shift swaps this
+let activeColor = 'red';
+
+const keys = {};
+const particles = [];
+let shakeT = 0, shakeAmt = 0;
+let rafId;
+
+// Animated bg
+let bgTime = 0;
+
+// ─── hearts ───────────────────────────────────────────────────
+function buildHearts(){
+  const c = document.getElementById('lives-el'); c.innerHTML='';
+  for(let i=0;i<MAX_LIVES;i++){
+    const s = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    s.setAttribute('viewBox','0 0 24 24');
+    s.setAttribute('fill',i<lives?C_RED:'none');
+    s.setAttribute('stroke',C_RED); s.setAttribute('stroke-width','2');
+    s.classList.add('heart'); if(i>=lives)s.classList.add('lost');
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d','M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z');
+    s.appendChild(p); c.appendChild(s);
+  }
+}
+function updateHearts(){
+  document.querySelectorAll('.heart').forEach((h,i)=>{
+    h.setAttribute('fill',i<lives?C_RED:'none');
+    h.classList.toggle('lost',i>=lives);
+  });
+}
+
+// Side badge (brief flash when swapping)
+let badgeTimer = 0;
+function showBadge(){
+  const dot  = document.getElementById('badge-dot');
+  const text = document.getElementById('badge-text');
+  const badge= document.getElementById('side-badge');
+  dot.style.background  = activeColor==='red'?C_RED:C_BLUE;
+  text.textContent      = activeColor==='red'?'+ ROJO':'− AZUL';
+  text.style.color      = activeColor==='red'?'rgba(232,41,74,.7)':'rgba(26,107,255,.7)';
+  badge.classList.add('show');
+  badgeTimer = 1200;
+}
+
+// ─── timing ───────────────────────────────────────────────────
+function elapsed(){ return (Date.now()-startTime)/1000; }
+function curSpeed(){ return BASE_SPEED*(1+elapsed()*0.014); }
+function curSpawn(){ return Math.max(320,BASE_SPAWN-elapsed()*12); }
+
+// ─── spawn ────────────────────────────────────────────────────
+// side of enemy: 'red' or 'blue'
+// from: 0=top, 1=right, 2=bottom, 3=left  (incoming direction)
+let lastFrom=-1;
+function spawnEnemy(){
+  const side = Math.random()<0.5 ? 'red' : 'blue';
+  let from;
+  do{ from=Math.floor(Math.random()*4); }while(from===lastFrom);
+  lastFrom=from;
+  const spd  = curSpeed();
+  let x, y, vx=0, vy=0;
+  const cx=W/2, cy=H/2;
+  if     (from===0){ x=cx; y=-ER;  }
+  else if(from===1){ x=W+ER; y=cy; }
+  else if(from===2){ x=cx; y=H+ER; }
+  else             { x=-ER; y=cy;  }
+  const adx=cx-x, ady=cy-y, adl=Math.sqrt(adx*adx+ady*ady);
+  vx=adx/adl*spd; vy=ady/adl*spd;
+
+  enemies.push({x,y,vx,vy,side,from,flash:0,deflected:false});
+}
+
+// ─── shield check ─────────────────────────────────────────────
+// An enemy is blocked when:
+//   - its incoming direction matches `dir` (facing direction)
+//   - AND its color matches `activeColor`
+function isBlocked(enemy){
+  return enemy.from === dir && enemy.side === activeColor;
+}
+
+// ─── particles ────────────────────────────────────────────────
+function spawnParticles(x,y,color){
+  for(let i=0;i<14;i++){
+    const a=(Math.PI*2/14)*i+(Math.random()-.5)*.5;
+    const s=2+Math.random()*5;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:2.5+Math.random()*3,color,life:1});
+  }
+}
+function tickParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; p.x+=p.vx; p.y+=p.vy;
+    p.vx*=.9; p.vy*=.9; p.life-=.03;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+function drawParticles(){
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.life*p.life;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2);
+    ctx.fillStyle=p.color; ctx.fill();
+  });
+  ctx.globalAlpha=1;
+}
+
+// ─── animated background ──────────────────────────────────────
+function drawBg(dt){
+  bgTime += dt * 0.0004;
+  ctx.fillStyle='#060610'; ctx.fillRect(0,0,W,H);
+
+  // Moving dot grid — subtle, drifting
+  const spacing = 48;
+  const cols = Math.ceil(W/spacing)+2;
+  const rows = Math.ceil(H/spacing)+2;
+  const ox = (bgTime*18)%spacing;
+  const oy = (bgTime*11)%spacing;
+
+  ctx.fillStyle='rgba(255,255,255,.06)';
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const x = c*spacing - ox;
+      const y = r*spacing - oy;
+      // pulse size based on distance to center
+      const dx=x-W/2, dy=y-H/2;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      const pulse=0.5+0.5*Math.sin(bgTime*2-dist*0.012);
+      const r2=1.2+pulse*1.2;
+      ctx.globalAlpha=0.03+pulse*0.055;
+      ctx.beginPath(); ctx.arc(x,y,r2,0,Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha=1;
+
+  // Radial vignette
+  const vg=ctx.createRadialGradient(W/2,H/2,H*.05,W/2,H/2,H*.85);
+  vg.addColorStop(0,'transparent'); vg.addColorStop(1,'rgba(0,0,0,.7)');
+  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+}
+
+// ─── draw player ──────────────────────────────────────────────
+// The circle has two halves. activeColor half faces `dir`.
+// Rotation angle: dir=0(up)→-PI/2, dir=1(right)→0, dir=2(down)→PI/2, dir=3(left)→PI
+function drawPlayer(){
+  const x=W/2, y=H/2;
+  // dir=0(up)→0, dir=1(right)→PI/2, dir=2(down)→PI, dir=3(left)→-PI/2
+  // active half (top in local space) rotates to face dir
+  const angle = dir*Math.PI/2;
+
+  const gc = activeColor==='red'?G_RED:G_BLUE;
+  const inactiveGc = activeColor==='red'?G_BLUE:G_RED;
+
+  // Outer glow — active side color
+  const og=ctx.createRadialGradient(x,y,PR*.3,x,y,PR*2.5);
+  og.addColorStop(0,gc+'0.28)'); og.addColorStop(1,'transparent');
+  ctx.fillStyle=og; ctx.beginPath(); ctx.arc(x,y,PR*2.5,0,Math.PI*2); ctx.fill();
+
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(angle);
+
+  // Clip to circle
+  ctx.save();
+  ctx.beginPath(); ctx.arc(0,0,PR,0,Math.PI*2); ctx.clip();
+
+  // In rotated space:
+  //   Top half = activeColor (faces dir)
+  //   Bottom half = inactive color
+  const topColor    = activeColor==='red'?C_RED:C_BLUE;
+  const bottomColor = activeColor==='red'?C_BLUE:C_RED;
+
+  ctx.fillStyle=topColor;    ctx.fillRect(-PR,-PR,PR*2,PR);
+  ctx.fillStyle=bottomColor; ctx.fillRect(-PR,0,PR*2,PR);
+
+  // Active half: slightly brighter
+  ctx.fillStyle='rgba(255,255,255,.12)';
+  ctx.fillRect(-PR,-PR,PR*2,PR);
+  // Inactive half: darker
+  ctx.fillStyle='rgba(0,0,0,.28)';
+  ctx.fillRect(-PR,0,PR*2,PR);
+
+  // Divider
+  ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(-PR,-1.5,PR*2,3);
+
+  ctx.restore(); // end clip
+
+  // Ring — active color
+  const ringCol = activeColor==='red'?'rgba(232,41,74,.8)':'rgba(26,107,255,.8)';
+  ctx.beginPath(); ctx.arc(0,0,PR,0,Math.PI*2);
+  ctx.strokeStyle=ringCol; ctx.lineWidth=2.5; ctx.stroke();
+
+  // Signs
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const fs=Math.round(PR*.72);
+  ctx.font=`bold ${fs}px -apple-system,sans-serif`;
+  // Active half (top = facing dir)
+  ctx.fillStyle='rgba(255,255,255,.95)';
+  ctx.fillText(activeColor==='red'?'+':'−', 0, -PR*.5);
+  // Inactive half (bottom = opposite dir)
+  ctx.fillStyle='rgba(255,255,255,.2)';
+  ctx.fillText(activeColor==='red'?'−':'+', 0, PR*.5);
+
+  // Arrow at tip (direction indicator)
+  ctx.fillStyle=activeColor==='red'?'rgba(232,41,74,.85)':'rgba(26,107,255,.85)';
+  ctx.beginPath();
+  ctx.moveTo(0,-(PR+15));
+  ctx.lineTo(-6,-(PR+5));
+  ctx.lineTo( 6,-(PR+5));
+  ctx.closePath(); ctx.fill();
+
+  ctx.restore();
+}
+
+// ─── draw enemy ───────────────────────────────────────────────
+function drawEnemy(e){
+  const{x,y,side,flash}=e;
+  const col  = side==='red'?C_RED:C_BLUE;
+  const gcol = side==='red'?G_RED:G_BLUE;
+
+  const g=ctx.createRadialGradient(x,y,0,x,y,ER*2.8);
+  g.addColorStop(0,gcol+(flash>0?'.8)':'.42)')); g.addColorStop(1,'transparent');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,ER*2.8,0,Math.PI*2); ctx.fill();
+
+  ctx.beginPath(); ctx.arc(x,y,ER,0,Math.PI*2);
+  ctx.fillStyle=flash>0?'#fff':col; ctx.fill();
+
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font=`bold ${Math.round(ER*1.05)}px -apple-system,sans-serif`;
+  ctx.fillStyle=flash>0?col:'rgba(255,255,255,.95)';
+  ctx.fillText(side==='red'?'+':'−',x,y+1);
+}
+
+// ─── update ───────────────────────────────────────────────────
+function update(dt){
+  if(state!=='playing') return;
+
+  bgTime; // already updated in draw
+  const t = elapsed();
+  document.getElementById('score').textContent = Math.floor(t)+'s';
+
+  // Badge timer
+  if(badgeTimer>0){
+    badgeTimer-=dt;
+    if(badgeTimer<=0) document.getElementById('side-badge').classList.remove('show');
+  }
+
+  // ── Input ─────────────────────────────────
+  // Direction: last pressed key sets dir
+  if(keys['ArrowUp']    || keys['w'] || keys['W']) dir=0;
+  if(keys['ArrowRight'] || keys['d'] || keys['D']) dir=1;
+  if(keys['ArrowDown']  || keys['s'] || keys['S']) dir=2;
+  if(keys['ArrowLeft']  || keys['a'] || keys['A']) dir=3;
+
+  // Swap active color: Q or Shift (handled on keydown, not here)
+
+  // ── Spawn ──────────────────────────────────
+  spawnTimer-=dt;
+  if(spawnTimer<=0){ spawnEnemy(); spawnTimer=curSpawn(); if(spawnTimer<0)spawnTimer=0; }
+
+  const cx=W/2, cy=H/2;
+
+  // ── Enemies ────────────────────────────────
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i];
+    if(e.flash>0) e.flash-=dt;
+
+    // Move
+    e.x+=e.vx; e.y+=e.vy;
+
+    // Collision with player
+    const cdx=e.x-cx, cdy=e.y-cy;
+    const cd=Math.sqrt(cdx*cdx+cdy*cdy);
+    if(cd < PR+ER){
+      if(isBlocked(e)){
+        // Deflect: shoot away from center at high speed, never touch again
+        const nd=cd||1;
+        const deflectSpd=curSpeed()*12;
+        e.vx=cdx/nd*deflectSpd;
+        e.vy=cdy/nd*deflectSpd;
+        e.deflected=true;
+        e.flash=80;
+      } else {
+        // Damage
+        lives--;
+        spawnParticles(e.x,e.y,e.side==='red'?C_RED:C_BLUE);
+        shakeT=280; shakeAmt=9;
+        updateHearts();
+        enemies.splice(i,1);
+        if(lives<=0){ endGame(); return; }
+      }
+      continue;
+    }
+
+    // If not deflected, steer toward center at current speed
+    if(!e.deflected){
+      const spd=curSpeed();
+      const len=Math.sqrt(e.vx*e.vx+e.vy*e.vy)||1;
+      e.vx=e.vx/len*spd; e.vy=e.vy/len*spd;
+    }
+
+    // Despawn
+    if(e.x<-400||e.x>W+400||e.y<-400||e.y>H+400) enemies.splice(i,1);
+  }
+
+  tickParticles();
+  if(shakeT>0) shakeT-=dt;
+}
+
+function draw(dt){
+  ctx.clearRect(0,0,W,H);
+  let sx=0,sy=0;
+  if(shakeT>0){sx=(Math.random()-.5)*shakeAmt;sy=(Math.random()-.5)*shakeAmt;}
+  ctx.save(); ctx.translate(sx,sy);
+  drawBg(dt);
+  if(state==='playing'){
+    drawParticles();
+    enemies.forEach(e=>drawEnemy(e));
+    drawPlayer();
+  }
+  ctx.restore();
+}
+
+function loop(ts){
+  const dt = lastTs ? ts-lastTs : 16; lastTs=ts;
+  update(dt); draw(dt);
+  rafId=requestAnimationFrame(loop);
+}
+
+// ─── game state ───────────────────────────────────────────────
+function startGame(){
+  state='playing'; lives=MAX_LIVES;
+  dir=2; activeColor='red';
+  enemies=[]; particles.length=0;
+  startTime=Date.now(); spawnTimer=900; lastTs=null;
+  resize();
+  buildHearts();
+  document.getElementById('score').textContent='0s';
+  document.getElementById('scr-start').classList.add('hidden');
+  document.getElementById('scr-over').classList.add('hidden');
+  document.getElementById('side-badge').classList.remove('show');
+  updateTouchControls();
+  if(rafId)cancelAnimationFrame(rafId);
+  rafId=requestAnimationFrame(loop);
+}
+function endGame(){
+  state='dead';
+  const t=Math.floor(elapsed());
+  const rec=t>bestScore; if(rec)bestScore=t;
+  document.getElementById('fs-score').textContent=t+'s';
+  document.getElementById('fs-best').textContent=
+    rec&&t>0?'¡Nuevo récord!':bestScore>0?`Récord: ${bestScore}s`:'';
+  updateTouchControls();
+  setTimeout(()=>{
+    document.getElementById('scr-over').classList.remove('hidden');
+    document.querySelectorAll('#toggle-touch-btn').forEach(b=>b.textContent='Controles táctiles: '+(touchEnabled?'ON':'OFF'));
+  },500);
+}
+
+// ─── input ────────────────────────────────────────────────────
+window.addEventListener('keydown',e=>{
+  if(keys[e.key]) return; // no repeat
+  keys[e.key]=true;
+
+  const dirs=['ArrowUp','ArrowRight','ArrowDown','ArrowLeft','w','a','s','d','W','A','S','D'];
+  if(dirs.includes(e.key)) e.preventDefault();
+
+  // Swap active side
+  if(e.key==='q'||e.key==='Q'||e.key==='Shift'){
+    if(state==='playing'){
+      activeColor = activeColor==='red'?'blue':'red';
+      showBadge();
+    }
+    e.preventDefault();
+  }
+});
+window.addEventListener('keyup',e=>{ keys[e.key]=false; });
+
+// ─── Touch controls state ────────────────────────────────────
+let touchEnabled = false;
+
+function toggleTouch(){
+  touchEnabled=!touchEnabled;
+  document.querySelectorAll('#toggle-touch-btn').forEach(b=>b.textContent='Controles táctiles: '+(touchEnabled?'ON':'OFF'));
+  updateTouchControls();
+}
+function updateTouchControls(){
+  const tc=document.getElementById('touch-controls');
+  if(touchEnabled) tc.classList.add('active');
+  else tc.classList.remove('active');
+}
+
+// D-pad buttons
+function setupJoystick(){
+  const zone  = document.getElementById('joystick-zone');
+  const stick = document.getElementById('joystick-stick');
+  const RADIUS = 42; // max stick travel in px
+  const DEAD   = 14; // dead zone
+
+  let activeTouchId = null;
+  let baseX, baseY;
+
+  function getZoneCenter(){
+    const r = zone.getBoundingClientRect();
+    return { x: r.left + r.width/2, y: r.top + r.height/2 };
+  }
+
+  function updateStick(cx, cy, tx, ty){
+    let dx = tx - cx, dy = ty - cy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const clamped = Math.min(dist, RADIUS);
+    const angle = Math.atan2(dy, dx);
+    const sx = Math.cos(angle)*clamped;
+    const sy = Math.sin(angle)*clamped;
+    stick.style.transform = `translate(calc(-50% + ${sx}px), calc(-50% + ${sy}px))`;
+
+    // Determine direction from angle (4-way snap)
+    if(dist > DEAD && state==='playing'){
+      const deg = ((angle * 180/Math.PI) + 360) % 360;
+      if     (deg>=315||deg< 45)  dir=1; // right
+      else if(deg>= 45&&deg<135)  dir=2; // down
+      else if(deg>=135&&deg<225)  dir=3; // left
+      else                        dir=0; // up
+    }
+  }
+
+  function resetStick(){
+    stick.style.transform = 'translate(-50%,-50%)';
+    activeTouchId = null;
+  }
+
+  zone.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    if(activeTouchId!==null) return;
+    const t = e.changedTouches[0];
+    activeTouchId = t.identifier;
+    const c = getZoneCenter();
+    updateStick(c.x, c.y, t.clientX, t.clientY);
+  },{passive:false});
+
+  zone.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    for(const t of e.changedTouches){
+      if(t.identifier===activeTouchId){
+        const c = getZoneCenter();
+        updateStick(c.x, c.y, t.clientX, t.clientY);
+      }
+    }
+  },{passive:false});
+
+  zone.addEventListener('touchend',e=>{
+    e.preventDefault();
+    for(const t of e.changedTouches){
+      if(t.identifier===activeTouchId) resetStick();
+    }
+  },{passive:false});
+
+  zone.addEventListener('touchcancel',e=>{ resetStick(); },{passive:false});
+
+  // Swap button
+  const swapEl=document.getElementById('swap-btn');
+  swapEl.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    if(state!=='playing')return;
+    activeColor=activeColor==='red'?'blue':'red'; showBadge();
+  },{passive:false});
+}
+setupJoystick();
+
+document.getElementById('btn-start').addEventListener('click',startGame);
+document.getElementById('btn-restart').addEventListener('click',startGame);
+
+// ─── init ─────────────────────────────────────────────────────
+resize();
+window.addEventListener('resize',resize);
+draw(16);
+</script>
+</body>
+</html>
